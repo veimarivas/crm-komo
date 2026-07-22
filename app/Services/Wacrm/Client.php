@@ -61,6 +61,32 @@ class Client
         return $this->unwrap($this->request()->post('/messages', ['to' => $phone, 'text' => $text]));
     }
 
+    /**
+     * Provisión idempotente de un usuario en el wacrm por email. Si ya
+     * existe en la cuenta remota actualiza el rol. Devuelve el user.
+     * Requiere scope team:write en la API key.
+     */
+    public function provisionUser(string $email, string $name, ?string $password = null, string $role = 'agent'): array
+    {
+        return $this->unwrap($this->request()->post('/team/provision', array_filter([
+            'email' => $email,
+            'name' => $name,
+            'password' => $password,
+            'role' => $role,
+        ])));
+    }
+
+    /**
+     * Reasigna una conversación al agente cuyo email se pasa (o desasigna
+     * pasando null). Requiere scope conversations:write.
+     */
+    public function assignConversation(string $conversationId, ?string $email): array
+    {
+        return $this->unwrap($this->request()->patch("/conversations/{$conversationId}/assign", [
+            'email' => $email,
+        ]));
+    }
+
     private function unwrap($response): array
     {
         if ($response->failed()) {

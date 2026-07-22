@@ -153,16 +153,23 @@ class LeadController extends Controller
             $lead->syncCustomFieldValues($customValues, 'lead');
         }
 
-        if ($lead->responsible_user_id && $lead->responsible_user_id !== $oldResponsible) {
-            \App\Models\AppNotification::notify(
-                $lead->account_id,
-                $lead->responsible_user_id,
-                'lead_assigned',
-                'Lead asignado',
-                "Te asignaron el lead «{$lead->title}»",
-                $lead->id,
-                $request->user()->id,
-            );
+        if ($lead->responsible_user_id !== $oldResponsible) {
+            if ($lead->responsible_user_id) {
+                \App\Models\AppNotification::notify(
+                    $lead->account_id,
+                    $lead->responsible_user_id,
+                    'lead_assigned',
+                    'Lead asignado',
+                    "Te asignaron el lead «{$lead->title}»",
+                    $lead->id,
+                    $request->user()->id,
+                );
+            }
+
+            // Espeja la asignación en el wacrm: la conversación pasa al
+            // Inbox del agente responsable. Silencioso si la integración
+            // no está configurada o si falla la red.
+            $this->syncAssignmentToWacrm($lead);
         }
 
         if ($oldValue !== (string) $lead->value) {
@@ -170,6 +177,35 @@ class LeadController extends Controller
         }
 
         return back()->with('success', 'Lead actualizado.');
+    }
+
+    /**
+     * Sincroniza el responsable del lead con la conversación en el wacrm.
+     * Se hace por email del agente (que debe existir en ambos sistemas).
+     */
+    private function syncAssignmentToWacrm(Lead $lead): void
+    {
+        if (! $lead->wacrm_conversation_id) {
+            return; // el lead no vino de WhatsApp, no hay nada que sincronizar
+        }
+
+        $integration = \App\Models\Integration::forAccount($lead->account_id)->first();
+        if (! $integration || ! $integration->wacrm_url || ! $integration->wacrm_api_key) {
+            return;
+        }
+
+        $email = $lead->responsible_user_id
+            ? \App\Models\User::whereKey($lead->responsible_user_id)->value('email')
+            : null;
+
+        try {
+            \App\Services\Wacrm\Client::for($integration)->assignConversation($lead->wacrm_conversation_id, $email);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Sync asignación → wacrm falló', [
+                'lead_id' => $lead->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /** Mover de etapa (Kanban o ficha). El estado se deriva de la etapa. */

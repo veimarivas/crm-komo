@@ -214,7 +214,42 @@ class TeamController extends Controller
 
         $invitation->update(['accepted_at' => now(), 'accepted_by_user_id' => $user->id]);
 
+        // Auto-provisión en el wacrm: crea el mismo user allá para que
+        // pueda entrar al Inbox con el mismo email/password. Silencioso
+        // si la integración no está configurada.
+        $this->provisionInWacrm($user, $invitation->account_id, $invitation->role, $validated['password'] ?? null);
+
         return redirect()->route('dashboard')->with('success', "Te uniste a {$invitation->account->name}.");
+    }
+
+    /**
+     * Crea (o actualiza) el mismo usuario en el wacrm por API. Usa el mismo
+     * email y password para que la cuenta valga en los dos sistemas. El rol
+     * se traduce: admin→admin, agent/viewer→agent (wacrm no distingue viewer
+     * en el Inbox, todos los no-admin quedan restringidos igual).
+     */
+    private function provisionInWacrm(User $user, string $accountId, string $role, ?string $plaintextPassword): void
+    {
+        $integration = \App\Models\Integration::forAccount($accountId)->first();
+        if (! $integration || ! $integration->wacrm_url || ! $integration->wacrm_api_key) {
+            return;
+        }
+
+        $wacrmRole = $role === 'admin' ? 'admin' : 'agent';
+
+        try {
+            \App\Services\Wacrm\Client::for($integration)->provisionUser(
+                email: $user->email,
+                name: $user->name,
+                password: $plaintextPassword, // null si ya existía el user en Komo
+                role: $wacrmRole,
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Auto-provisión en wacrm falló', [
+                'user_email' => $user->email,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function findInvitation(string $token): ?AccountInvitation
