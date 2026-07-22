@@ -87,6 +87,14 @@ class Client
         ]));
     }
 
+    /** Modo IA/Humano de la conversación en el wacrm (true = IA activa). */
+    public function setAiMode(string $conversationId, bool $aiEnabled): array
+    {
+        return $this->unwrap($this->request()->patch("/conversations/{$conversationId}/ai-mode", [
+            'ai_enabled' => $aiEnabled,
+        ]));
+    }
+
     private function unwrap($response): array
     {
         if ($response->failed()) {

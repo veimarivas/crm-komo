@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
 
 #[Fillable([
     'account_id', 'pipeline_id', 'stage_id', 'contact_id', 'company_id',
-    'responsible_user_id', 'title', 'value', 'currency', 'source',
+    'responsible_user_id', 'ai_enabled', 'title', 'value', 'currency', 'source',
     'source_ref', 'source_url', 'meta_leadgen_id',
     'status', 'closed_at', 'wacrm_conversation_id',
 ])]
@@ -30,6 +30,7 @@ class Lead extends Model
         return [
             'value' => 'decimal:2',
             'closed_at' => 'datetime',
+            'ai_enabled' => 'boolean',
         ];
     }
 

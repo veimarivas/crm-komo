@@ -192,6 +192,41 @@ class LeadController extends Controller
     }
 
     /**
+     * Toggle IA/Humano del lead. Solo lo puede cambiar el admin (si el lead
+     * no tiene responsable) o el responsable asignado. Sincroniza al wacrm.
+     */
+    public function setAiMode(Request $request, Lead $lead): RedirectResponse
+    {
+        $this->authorizeLead($request, $lead);
+
+        $user = $request->user();
+        // Si hay responsable asignado, solo el responsable o admin pueden cambiar el modo.
+        if ($lead->responsible_user_id && $lead->responsible_user_id !== $user->id
+            && ! $user->hasRoleAtLeast(User::ROLE_ADMIN)) {
+            abort(403, 'Solo el responsable o el admin pueden cambiar el modo IA de este lead.');
+        }
+
+        $validated = $request->validate(['ai_enabled' => 'required|boolean']);
+        $lead->update(['ai_enabled' => $validated['ai_enabled']]);
+
+        // Espeja al wacrm.
+        if ($lead->wacrm_conversation_id) {
+            $integration = \App\Models\Integration::forAccount($lead->account_id)->first();
+            if ($integration && $integration->wacrm_url && $integration->wacrm_api_key) {
+                try {
+                    \App\Services\Wacrm\Client::for($integration)->setAiMode($lead->wacrm_conversation_id, $validated['ai_enabled']);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('Sync ai-mode → wacrm falló', [
+                        'lead_id' => $lead->id, 'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+
+        return back();
+    }
+
+    /**
      * Sincroniza el responsable del lead con la conversación en el wacrm.
      * Se hace por email del agente (que debe existir en ambos sistemas).
      */

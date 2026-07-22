@@ -418,6 +418,46 @@ export default function Show({ lead, stages, events, tasks, notes, members, cont
                                         <p className="font-bold text-gray-900 truncate">{contactName}</p>
                                         <p className="text-xs text-gray-500 font-mono truncate">{lead.contact?.phone || 'sin teléfono'}</p>
                                     </div>
+                                    {whatsappEnabled && lead.wacrm_conversation_id && (
+                                        (isAdmin || !lead.responsible_user_id || lead.responsible_user_id === auth?.user?.id) ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => router.patch(route('leads.ai-mode', lead.id), { ai_enabled: !lead.ai_enabled }, { preserveScroll: true })}
+                                                title={lead.ai_enabled ? 'Cambiar a Humano (silenciar IA)' : 'Cambiar a IA (auto-respuesta)'}
+                                                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold border transition-all shadow-sm ${
+                                                    lead.ai_enabled
+                                                        ? 'border-violet-300 bg-gradient-to-br from-violet-50 to-purple-50 text-violet-700 shadow-violet-500/10'
+                                                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                {lead.ai_enabled ? (
+                                                    <>
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                                                        </svg>
+                                                        IA activa
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                                        </svg>
+                                                        Humano
+                                                    </>
+                                                )}
+                                            </button>
+                                        ) : (
+                                            <span
+                                                title="Solo el responsable o el admin pueden cambiar el modo IA"
+                                                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold border ${
+                                                    lead.ai_enabled ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-gray-200 bg-gray-50 text-gray-600'
+                                                }`}
+                                            >
+                                                {lead.ai_enabled ? '✨ IA activa' : '👤 Humano'}
+                                            </span>
+                                        )
+                                    )}
                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ring-1 bg-emerald-50 text-emerald-700 ring-emerald-200">
                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                                         {lead.status === 'open' ? 'Activo' : lead.status}

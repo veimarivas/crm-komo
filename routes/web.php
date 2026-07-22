@@ -42,6 +42,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/tags', [\App\Http\Controllers\TagController::class, 'store'])->name('tags.store');
     Route::delete('/tags/{tag}', [\App\Http\Controllers\TagController::class, 'destroy'])->name('tags.destroy');
     Route::post('/leads/{lead}/whatsapp', [\App\Http\Controllers\LeadController::class, 'sendWhatsapp'])->name('leads.whatsapp');
+    Route::patch('/leads/{lead}/ai-mode', [\App\Http\Controllers\LeadController::class, 'setAiMode'])->name('leads.ai-mode');
 
     // Tareas
     Route::get('/tasks', [\App\Http\Controllers\TaskController::class, 'index'])->name('tasks.index');
