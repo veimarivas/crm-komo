@@ -73,25 +73,38 @@ function DateSeparator({ label }) {
     );
 }
 
+function outboundAuthor(p) {
+    if (p.sender === 'bot') return { text: '✨ IA', color: 'text-violet-600' };
+    const name = p.sender_name || 'Agente';
+    const isAdmin = p.sender_role === 'owner' || p.sender_role === 'admin';
+    return { text: name + (isAdmin ? ' · Admin' : ''), color: 'text-[#045474]' };
+}
+
 function ChatBubble({ event, contactName }) {
     const isCustomer = event.event_type === 'message_in';
     const p = event.payload ?? {};
     const time = new Date(event.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const author = !isCustomer ? outboundAuthor(p) : null;
 
     return (
         <div className={`flex items-end gap-2 ${isCustomer ? 'justify-start' : 'justify-end'}`}>
             {isCustomer && <Avatar name={contactName} size="sm" />}
-            <div
-                className={`max-w-[70%] rounded-2xl px-3.5 py-2.5 text-sm shadow-sm ${
-                    isCustomer
-                        ? 'bg-white text-gray-900 rounded-bl-md border border-gray-100'
-                        : 'bg-gradient-to-br from-[#045474] to-[#1c486c] text-white rounded-br-md shadow-md shadow-[#045474]/20'
-                }`}
-            >
-                <p className="whitespace-pre-wrap break-words leading-relaxed">{p.text || '[sin texto]'}</p>
-                <div className={`mt-1 flex items-center gap-1 text-[10px] ${isCustomer ? 'text-gray-400' : 'text-white/70'}`}>
-                    <span>{time}</span>
-                    {!isCustomer && <span>✓✓</span>}
+            <div className={`flex flex-col max-w-[70%] ${isCustomer ? 'items-start' : 'items-end'}`}>
+                {author && (
+                    <span className={`text-[10px] font-bold mb-0.5 mr-2 ${author.color}`}>{author.text}</span>
+                )}
+                <div
+                    className={`rounded-2xl px-3.5 py-2.5 text-sm shadow-sm ${
+                        isCustomer
+                            ? 'bg-white text-gray-900 rounded-bl-md border border-gray-100'
+                            : 'bg-gradient-to-br from-[#045474] to-[#1c486c] text-white rounded-br-md shadow-md shadow-[#045474]/20'
+                    }`}
+                >
+                    <p className="whitespace-pre-wrap break-words leading-relaxed">{p.text || '[sin texto]'}</p>
+                    <div className={`mt-1 flex items-center gap-1 text-[10px] ${isCustomer ? 'text-gray-400' : 'text-white/70'}`}>
+                        <span>{time}</span>
+                        {!isCustomer && <span>✓✓</span>}
+                    </div>
                 </div>
             </div>
         </div>

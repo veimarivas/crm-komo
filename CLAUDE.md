@@ -75,6 +75,43 @@ Activa la integración con **meta_ads** (`C:\xampp_82_12\htdocs\laravel_meta_ads
 
 Cableado con meta_ads: crear aquí una API key con ambos scopes y pegarla en meta_ads → Ajustes → Integraciones (tarjeta Komo).
 
+## Fase 13 (2026-07-22) — Autor del mensaje visible en el chat del lead
+
+- **`EventProcessor@handleOutboundMessage`**: además de `sender` (agent|bot), guarda `sender_name` y `sender_role` en `payload` del evento `message_out`. Vienen del webhook `message.sent` del wacrm (Ronda 12 del wacrm — receptor compatible con eventos viejos que no los traen: se guardan como null).
+- **`Show.jsx` — `outboundAuthor(payload)` + label sobre la burbuja**: sobre cada burbuja saliente del chat del lead aparece:
+  - `✨ IA` (violeta) para `sender=bot`.
+  - `{sender_name}` para agents, con sufijo `· Admin` cuando `sender_role` es owner/admin.
+  - Fallback `Agente` si el payload no trae `sender_name` (eventos viejos anteriores a este cambio).
+  - Layout envuelto en `flex flex-col items-end` (o items-start para message_in) — el nombre queda pegado al borde de la burbuja del lado correspondiente.
+
+## Fase 12 (2026-07-21/22) — Producción, integración total con wacrm y restricciones por rol
+
+Ronda de integración end-to-end en producción. Komo desplegado en `https://komo.posgradosinnovaciencia.com` (VPS Ubuntu compartido con el wacrm; nginx vhost `/etc/nginx/sites-available/crm-komo`, cert Let's Encrypt, systemd `crm-komo-queue.service`, cron `schedule:run` cada minuto). Cookie: `SESSION_COOKIE=komo_session`. Sin Reverb (usamos polling; ver más abajo).
+
+- **Rediseño login estilo wacrm** (`Layouts/GuestLayout.jsx` + `Pages/Auth/Login.jsx` + `Invitations/Accept.jsx`): fondo `bg-gradient-to-br from-[#042048] via-[#1c486c] to-[#045474]` con blur circles, logo ESAM (`public/logo_esam.png`, copiado del wacrm), card blanca central con ícono amarillo `#e6dd5e`. Reemplaza los componentes Breeze originales que se veían mal sobre el nuevo fondo.
+- **Ficha del lead estilo chat WhatsApp** (`Leads/Show.jsx` completo): nueva tab **"💬 Chat"** como principal — reemplaza el Timeline como vista default. Header con avatar circular de iniciales + gradiente por hash del nombre (8 AVATAR_COLORS), teléfono en monoespaciado, badge "Activo". Hilo con burbujas rounded-2xl agrupadas por día vía `dayLabel()` (Hoy/Ayer/nombre), separadores `DateSeparator`, `ChatBubble` (message_in bg-white izq / message_out gradiente marca der con ✓✓), `SystemEvent` (chip centrado para stage_changed/won/lost/note/task). Composer inferior con textarea auto-crece + Enter=enviar. Tabs originales (Tareas/Notas/Timeline) siguen accesibles. **Polling 5s** con `router.reload({ only: ['events','tasks','notes','lead'] })` mientras la tab Chat esté activa y `!document.hidden`.
+- **Handler `message.sent`** (`Services/Wacrm/EventProcessor@handleOutboundMessage`): registra los mensajes salientes del wacrm (agente o IA) como evento `message_out` en el timeline del lead. Idempotente por wamid (`whereJsonContains('payload->wamid', $wamid)`). Ignora silenciosamente si no hay lead abierto para el contacto.
+- **`Wacrm/Client` extendido** con 3 métodos nuevos (todos requieren scopes nuevos en la API key del wacrm):
+  - `provisionUser(email, name, password, role)` — POST `/api/v1/team/provision`.
+  - `assignConversation(conversationId, email)` — PATCH `/api/v1/conversations/{id}/assign`.
+  - `setAiMode(conversationId, aiEnabled)` — PATCH `/api/v1/conversations/{id}/ai-mode`.
+- **Sync de responsable Komo → wacrm** (`LeadController@update` → `syncAssignmentToWacrm()`): cuando cambia `responsible_user_id` de un lead con `wacrm_conversation_id`, llama a `Client::assignConversation()` con el email del nuevo responsable. Falla silenciosa con Log::warning si la red o la API responden mal.
+- **Auto-provisión de user en wacrm al aceptar invitación** (`TeamController@redeem` → `provisionInWacrm()`): tras crear el user local, llama a `Client::provisionUser()` con **el mismo email y password**. Así el agente logueado en el Komo puede entrar al Inbox del wacrm con las mismas credenciales. Traducción de roles: admin→admin, agent/viewer→agent.
+- **Toggle IA/Humano por lead** (columna `leads.ai_enabled` boolean default true, migración `2026_07_22_000001`): botón violeta "✨ IA activa" / gris "👤 Humano" en el header del chat de la ficha. Endpoint `PATCH /leads/{lead}/ai-mode` (`leads.ai-mode`) llama a `LeadController@setAiMode` → actualiza el lead + espeja a wacrm via `Client::setAiMode()`. Permisos: si el lead **no tiene responsable**, solo admin/owner puede togglear; si tiene, solo el responsable o el admin. Otros agents ven el estado como badge readonly.
+- **Restricción por rol** (todas las secciones):
+  - **Middleware `admin.only`** (`Http/Middleware/AdminOnly.php`, alias en `bootstrap/app.php`): 403 para no-admin. Aplicado en `routes/web.php` a Formularios, Campos, Equipo, Integración (grupo `Route::middleware('admin.only')`). Notificaciones queda fuera del grupo (todos las ven).
+  - **Sidebar** (`Layouts/AuthenticatedLayout.jsx`): items del NAV marcados `adminOnly: true` se filtran por `visibleNav` según `user.account_role`. Ocultos para agent: Formularios, Campos, Equipo, Integración.
+  - **`LeadController`**: `index` filtra por `responsible_user_id = user.id` para no-admin; `authorizeLead` bloquea Show/update/whatsapp/etc de leads ajenos; `update` descarta `responsible_user_id` del validated si el user no es admin (agent no puede reasignarse ni pasarlo a otro).
+  - **`TaskController@store`**: agent solo puede crear tareas en leads asignados a él.
+  - **`ContactController@index` + `CompanyController@index`**: filtro `whereHas('leads', responsible_user_id=user.id)` para no-admin.
+  - **`DashboardController`**: todos los KPIs y `recentLeads` scoped por responsable (agent solo ve sus números). `myTasks` ya filtraba por user.
+  - **`ReportController`**: mismo scope. `byUser` (ranking del equipo) queda vacío para no-admin (solo admin compara equipo). Pasa `isAdmin` como prop.
+  - **`Show.jsx`** (frontend): campo Responsable es dropdown solo para admin; para agent aparece como texto readonly con el nombre. Consumido de `auth.user.account_role`.
+- **Botón "🔄 Regenerar link" en invitaciones pendientes** (`TeamController@regenerateInvitation` + `Settings/Team.jsx`): crea un token nuevo para una invitación existente (útil cuando el admin perdió el link original que solo se muestra una vez). Ruta `POST /settings/team/invitations/{invitation}/regenerate` (`team.invitations.regenerate`). Renueva `expires_at` a +7 días.
+- **Artisan `komo:sync-assignments`** (`Console/Commands/SyncAssignmentsToWacrm.php`): recorre todos los leads con `wacrm_conversation_id` + `responsible_user_id` y llama a `Client::assignConversation` para cada uno. Con `--account={uuid}` filtra a una cuenta. Barra de progreso + total OK/fallos. Uso: `php artisan komo:sync-assignments` — one-shot para migrar asignaciones existentes cuando se activa la restricción por primera vez.
+- **Requisito operativo importante**: los agentes deben existir en AMBOS sistemas (Komo + wacrm) con **exactamente el mismo email** (la correlación es por email). La auto-provisión cubre esto automáticamente para agentes creados vía invitación; los agentes viejos (pre-Fase 12) hay que provisionarlos a mano (tinker: `\App\Models\User::create(...)` en ambas apps).
+- **Trampa conocida**: si el `wacrm_conversation_id` de un lead apunta a una conversación que fue borrada/reseteada en el wacrm, el sync devuelve 404 "No query results for model [App\Models\Conversation]". Fix rápido: buscar la conversación actual por `phone_normalized` en el wacrm y actualizar el `wacrm_conversation_id` del lead.
+
 ## Fase 11 (2026-07-19) — Equipo centralizado — suite 63/63 (284 aserciones)
 
 Fase 7 del Komo Hub: `ProvisionController` acepta `account_id` (uuid existente) + `account_role`. Si llegan, el user se une a la cuenta remota con ese rol sin sembrar pipeline extra; sin ellos, mantiene el comportamiento original (owner + pipeline por defecto via AccountProvisioner). Test `ProvisionMemberTest`.

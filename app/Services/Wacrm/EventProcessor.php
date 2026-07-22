@@ -180,6 +180,8 @@ class EventProcessor
             'type' => $data['message']['type'] ?? 'text',
             'wamid' => $wamid,
             'sender' => $data['message']['sender_type'] ?? 'agent', // 'agent' | 'bot'
+            'sender_name' => $data['message']['sender_name'] ?? null,
+            'sender_role' => $data['message']['sender_role'] ?? null,
         ]);
     }
 }
