@@ -26,6 +26,7 @@ class EventProcessor
         match ($event) {
             'contact.created' => $this->syncContact($integration, $data['contact'] ?? []),
             'message.received' => $this->handleInboundMessage($integration, $data),
+            'message.sent' => $this->handleOutboundMessage($integration, $data),
             default => null, // eventos que no nos interesan se ignoran
         };
     }
@@ -139,6 +140,46 @@ class EventProcessor
             'text' => mb_substr($data['message']['text'] ?? '', 0, 500),
             'type' => $data['message']['type'] ?? 'text',
             'wamid' => $data['message']['wamid'] ?? null,
+        ]);
+    }
+
+    /**
+     * Mensaje saliente del wacrm (agente humano o IA/bot): se registra
+     * como message_out en el lead abierto de ese contacto. Si no hay lead
+     * abierto se ignora — un mensaje saliente sin conversación previa es
+     * un caso raro (probablemente un broadcast a un contacto sin lead).
+     * Idempotente por wamid: si el evento se reenvía no se duplica.
+     */
+    private function handleOutboundMessage(Integration $integration, array $data): void
+    {
+        $contact = $this->syncContact($integration, $data['contact'] ?? []);
+
+        if (! $contact) {
+            return;
+        }
+
+        $lead = Lead::forAccount($integration->account_id)
+            ->where('contact_id', $contact->id)
+            ->where('status', Lead::STATUS_OPEN)
+            ->latest()
+            ->first();
+
+        if (! $lead) {
+            return;
+        }
+
+        $wamid = $data['message']['wamid'] ?? null;
+
+        // Idempotencia: si ya registré este wamid, no duplico.
+        if ($wamid && $lead->events()->where('event_type', 'message_out')->whereJsonContains('payload->wamid', $wamid)->exists()) {
+            return;
+        }
+
+        $lead->recordEvent('message_out', null, [
+            'text' => mb_substr($data['message']['text'] ?? '', 0, 500),
+            'type' => $data['message']['type'] ?? 'text',
+            'wamid' => $wamid,
+            'sender' => $data['message']['sender_type'] ?? 'agent', // 'agent' | 'bot'
         ]);
     }
 }
