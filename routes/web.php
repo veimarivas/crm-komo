@@ -79,6 +79,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings/team', [\App\Http\Controllers\TeamController::class, 'index'])->name('settings.team');
     Route::post('/settings/team/invitations', [\App\Http\Controllers\TeamController::class, 'invite'])->name('team.invite');
     Route::delete('/settings/team/invitations/{invitation}', [\App\Http\Controllers\TeamController::class, 'revokeInvitation'])->name('team.invitations.revoke');
+    Route::post('/settings/team/invitations/{invitation}/regenerate', [\App\Http\Controllers\TeamController::class, 'regenerateInvitation'])->name('team.invitations.regenerate');
     Route::patch('/settings/team/members/{member}', [\App\Http\Controllers\TeamController::class, 'updateMember'])->name('team.members.update');
     Route::delete('/settings/team/members/{member}', [\App\Http\Controllers\TeamController::class, 'removeMember'])->name('team.members.remove');
     Route::post('/settings/team/members/{member}/transfer-ownership', [\App\Http\Controllers\TeamController::class, 'transferOwnership'])->name('team.members.transfer');

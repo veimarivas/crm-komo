@@ -168,8 +168,8 @@ export default function Team({ members, invitations, apiKeys = [], apiScopes = [
                         <div className="p-5 sm:p-6 border-t border-gray-100 space-y-2">
                             <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Invitaciones activas</p>
                             {invitations.map((inv) => (
-                                <div key={inv.id} className="flex items-center justify-between rounded-xl bg-gray-50 p-3 text-sm">
-                                    <span className="text-gray-600">
+                                <div key={inv.id} className="flex items-center justify-between rounded-xl bg-gray-50 p-3 text-sm gap-3">
+                                    <span className="text-gray-600 min-w-0 flex-1">
                                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ring-1 mr-2 ${ROLE_META[inv.role]?.bg} ${ROLE_META[inv.role]?.text} ${ROLE_META[inv.role]?.ring}`}>
                                             {ROLE_META[inv.role]?.label ?? inv.role}
                                         </span>
@@ -177,9 +177,19 @@ export default function Team({ members, invitations, apiKeys = [], apiScopes = [
                                         <span className="text-gray-400 ml-2 text-xs">expira {new Date(inv.expires_at).toLocaleDateString('es', { day: 'numeric', month: 'short' })}</span>
                                     </span>
                                     {isAdmin && (
-                                        <button onClick={() => router.delete(route('team.invitations.revoke', inv.id), { preserveScroll: true })} className="text-xs text-red-600 hover:text-red-700 font-medium">
-                                            Revocar
-                                        </button>
+                                        <div className="flex items-center gap-3 shrink-0">
+                                            <button
+                                                onClick={() => router.post(route('team.invitations.regenerate', inv.id), {}, { preserveScroll: true })}
+                                                title="Regenera el token y muestra el link arriba (útil si perdiste el original)"
+                                                className="text-xs text-emerald-700 hover:text-emerald-800 font-medium flex items-center gap-1"
+                                            >
+                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+                                                Regenerar link
+                                            </button>
+                                            <button onClick={() => router.delete(route('team.invitations.revoke', inv.id), { preserveScroll: true })} className="text-xs text-red-600 hover:text-red-700 font-medium">
+                                                Revocar
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
                             ))}

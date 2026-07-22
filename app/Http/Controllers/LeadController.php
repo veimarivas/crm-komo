@@ -25,10 +25,16 @@ class LeadController extends Controller
             ?? $pipelines->firstWhere('is_default', true)
             ?? $pipelines->first();
 
+        $user = $request->user();
+        $isAdmin = $user->hasRoleAtLeast(User::ROLE_ADMIN);
+
         $leads = $selected
             ? $selected->leads()
                 ->with(['contact:id,name,phone', 'responsible:id,name'])
                 ->withCount(['tasks as pending_tasks_count' => fn ($q) => $q->whereNull('completed_at')])
+                // Restricción por rol: agent/viewer solo ve los leads asignados
+                // a ellos. admin/owner ven todo el pipeline.
+                ->when(! $isAdmin, fn ($q) => $q->where('responsible_user_id', $user->id))
                 ->orderByDesc('created_at')
                 ->get()
             : collect();
@@ -300,6 +306,15 @@ class LeadController extends Controller
 
     private function authorizeLead(Request $request, Lead $lead): void
     {
-        abort_if($lead->account_id !== $request->user()->account_id, 403);
+        $user = $request->user();
+
+        abort_if($lead->account_id !== $user->account_id, 403);
+
+        // Agent/viewer: solo puede ver/editar/escribir en leads asignados a él.
+        // admin/owner: acceso completo (para hacer seguimiento del equipo).
+        if (! $user->hasRoleAtLeast(User::ROLE_ADMIN)) {
+            abort_if($lead->responsible_user_id !== $user->id, 403,
+                'No tienes acceso a este lead. Pídele al admin que te lo asigne.');
+        }
     }
 }

@@ -105,6 +105,26 @@ class TeamController extends Controller
         return back()->with('success', 'Invitación revocada.');
     }
 
+    /**
+     * Regenera el token de una invitación pendiente y devuelve el nuevo link.
+     * Útil cuando el admin necesita reenviar el link (el original solo se
+     * mostraba una vez al crear la invitación).
+     */
+    public function regenerateInvitation(Request $request, AccountInvitation $invitation): RedirectResponse
+    {
+        $this->requireAdmin($request);
+        abort_if($invitation->account_id !== $request->user()->account_id, 403);
+        abort_if($invitation->accepted_at !== null, 422, 'Esta invitación ya fue aceptada.');
+
+        $token = Str::random(48);
+        $invitation->update([
+            'token_hash' => hash('sha256', $token),
+            'expires_at' => now()->addDays(7),
+        ]);
+
+        return back()->with('invite_url', route('invitations.accept', $token));
+    }
+
     public function updateMember(Request $request, User $member): RedirectResponse
     {
         $this->requireAdmin($request);

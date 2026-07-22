@@ -58,6 +58,10 @@ class TaskController extends Controller
         $lead = null;
         if ($validated['lead_id'] ?? null) {
             $lead = Lead::forAccount($accountId)->findOrFail($validated['lead_id']);
+            // Agent solo puede crear tareas en leads asignados a él.
+            if (! $request->user()->hasRoleAtLeast(User::ROLE_ADMIN)) {
+                abort_if($lead->responsible_user_id !== $request->user()->id, 403);
+            }
         }
 
         $task = Task::create([
