@@ -142,6 +142,12 @@ class LeadController extends Controller
             'custom_values.*' => 'nullable|string|max:1000',
         ]);
 
+        // Solo admin/owner puede cambiar el responsable. Los agents no pueden
+        // reasignarse un lead ni pasarlo a otro miembro del equipo.
+        if (! $request->user()->hasRoleAtLeast(User::ROLE_ADMIN)) {
+            unset($validated['responsible_user_id']);
+        }
+
         $customValues = $validated['custom_values'] ?? null;
         unset($validated['custom_values']);
 

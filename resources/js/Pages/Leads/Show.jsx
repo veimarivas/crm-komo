@@ -152,7 +152,8 @@ function TimelineEvent({ event }) {
 }
 
 export default function Show({ lead, stages, events, tasks, notes, members, contacts, companies, allTags, customFields, customValues, whatsappEnabled }) {
-    const { flash } = usePage().props;
+    const { flash, auth } = usePage().props;
+    const isAdmin = auth?.user?.account_role === 'owner' || auth?.user?.account_role === 'admin';
     const [tab, setTab] = useState('chat');
     const [newTag, setNewTag] = useState(null);
     const bottomRef = useRef(null);
@@ -303,10 +304,17 @@ export default function Show({ lead, stages, events, tasks, notes, members, cont
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Responsable</label>
-                                <select value={editForm.data.responsible_user_id} onChange={(e) => editForm.setData('responsible_user_id', e.target.value)} className={inputClass}>
-                                    <option value="">— Nadie —</option>
-                                    {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                                </select>
+                                {isAdmin ? (
+                                    <select value={editForm.data.responsible_user_id} onChange={(e) => editForm.setData('responsible_user_id', e.target.value)} className={inputClass}>
+                                        <option value="">— Nadie —</option>
+                                        {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                    </select>
+                                ) : (
+                                    <div className="flex items-center gap-2 px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 text-gray-700">
+                                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                        {lead.responsible?.name || 'Sin asignar'}
+                                    </div>
+                                )}
                             </div>
                             {customFields.map((field) => (
                                 <div key={field.id}>
