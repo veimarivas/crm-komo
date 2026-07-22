@@ -13,7 +13,12 @@ class ReportController extends Controller
 {
     public function index(Request $request): Response
     {
-        $accountId = $request->user()->account_id;
+        $user = $request->user();
+        $accountId = $user->account_id;
+        $isAdmin = $user->hasRoleAtLeast(User::ROLE_ADMIN);
+
+        // Scope Lead: admin ve todo, agent solo lo asignado a él.
+        $leadScope = fn ($q) => $isAdmin ? $q : $q->where('responsible_user_id', $user->id);
 
         $pipelines = Pipeline::forAccount($accountId)->with('stages')->get();
         $selected = $pipelines->firstWhere('id', $request->query('pipeline'))
@@ -25,19 +30,19 @@ class ReportController extends Controller
             ? $selected->stages->where('stage_type', 'open')->values()->map(fn ($stage) => [
                 'name' => $stage->name,
                 'color' => $stage->color,
-                'count' => Lead::where('stage_id', $stage->id)->where('status', 'open')->count(),
-                'value' => (float) Lead::where('stage_id', $stage->id)->where('status', 'open')->sum('value'),
+                'count' => $leadScope(Lead::where('stage_id', $stage->id)->where('status', 'open'))->count(),
+                'value' => (float) $leadScope(Lead::where('stage_id', $stage->id)->where('status', 'open'))->sum('value'),
             ])
             : collect();
 
         // Ganados / perdidos por mes (últimos 6).
-        $monthly = collect(range(5, 0))->map(function ($monthsAgo) use ($accountId) {
+        $monthly = collect(range(5, 0))->map(function ($monthsAgo) use ($accountId, $leadScope) {
             $start = now()->subMonths($monthsAgo)->startOfMonth();
             $end = $start->copy()->endOfMonth();
 
-            $base = fn (string $status) => Lead::forAccount($accountId)
+            $base = fn (string $status) => $leadScope(Lead::forAccount($accountId)
                 ->where('status', $status)
-                ->whereBetween('closed_at', [$start, $end]);
+                ->whereBetween('closed_at', [$start, $end]));
 
             return [
                 'month' => $start->translatedFormat('M Y'),
@@ -47,25 +52,27 @@ class ReportController extends Controller
             ];
         });
 
-        // Ranking del equipo este mes.
-        $byUser = User::where('account_id', $accountId)
-            ->get(['id', 'name'])
-            ->map(fn ($user) => [
-                'name' => $user->name,
-                'won' => Lead::forAccount($accountId)->where('status', 'won')
-                    ->where('responsible_user_id', $user->id)
-                    ->where('closed_at', '>=', now()->startOfMonth())->count(),
-                'wonValue' => (float) Lead::forAccount($accountId)->where('status', 'won')
-                    ->where('responsible_user_id', $user->id)
-                    ->where('closed_at', '>=', now()->startOfMonth())->sum('value'),
-                'open' => Lead::forAccount($accountId)->where('status', 'open')
-                    ->where('responsible_user_id', $user->id)->count(),
-            ])
-            ->sortByDesc('wonValue')
-            ->values();
+        // Ranking del equipo: solo admin lo ve; agent no compara con otros.
+        $byUser = $isAdmin
+            ? User::where('account_id', $accountId)
+                ->get(['id', 'name'])
+                ->map(fn ($u) => [
+                    'name' => $u->name,
+                    'won' => Lead::forAccount($accountId)->where('status', 'won')
+                        ->where('responsible_user_id', $u->id)
+                        ->where('closed_at', '>=', now()->startOfMonth())->count(),
+                    'wonValue' => (float) Lead::forAccount($accountId)->where('status', 'won')
+                        ->where('responsible_user_id', $u->id)
+                        ->where('closed_at', '>=', now()->startOfMonth())->sum('value'),
+                    'open' => Lead::forAccount($accountId)->where('status', 'open')
+                        ->where('responsible_user_id', $u->id)->count(),
+                ])
+                ->sortByDesc('wonValue')
+                ->values()
+            : collect();
 
-        $totalWon = Lead::forAccount($accountId)->where('status', 'won')->count();
-        $totalLost = Lead::forAccount($accountId)->where('status', 'lost')->count();
+        $totalWon = $leadScope(Lead::forAccount($accountId)->where('status', 'won'))->count();
+        $totalLost = $leadScope(Lead::forAccount($accountId)->where('status', 'lost'))->count();
 
         return Inertia::render('Reports/Index', [
             'pipelines' => $pipelines->map(fn ($p) => ['id' => $p->id, 'name' => $p->name]),
@@ -78,10 +85,11 @@ class ReportController extends Controller
                 'lost' => $totalLost,
                 'rate' => ($totalWon + $totalLost) > 0 ? round($totalWon / ($totalWon + $totalLost) * 100) : 0,
                 'avgTicket' => $totalWon > 0
-                    ? (float) Lead::forAccount($accountId)->where('status', 'won')->avg('value')
+                    ? (float) $leadScope(Lead::forAccount($accountId)->where('status', 'won'))->avg('value')
                     : 0,
             ],
-            'currency' => $request->user()->account->default_currency,
+            'isAdmin' => $isAdmin,
+            'currency' => $user->account->default_currency,
         ]);
     }
 }

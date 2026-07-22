@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // API pública v1 autenticada por API key con scopes (patrón wacrm).
         $middleware->alias([
             'api.key' => \App\Http\Middleware\AuthenticateApiKey::class,
+            'admin.only' => \App\Http\Middleware\AdminOnly::class,
         ]);
 
         // El webhook del wacrm se autentica por firma HMAC, no por sesión.

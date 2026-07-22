@@ -14,12 +14,16 @@ class ContactController extends Controller
 {
     public function index(Request $request): Response
     {
-        $accountId = $request->user()->account_id;
+        $user = $request->user();
+        $accountId = $user->account_id;
+        $isAdmin = $user->hasRoleAtLeast(\App\Models\User::ROLE_ADMIN);
 
         return Inertia::render('Contacts/Index', [
             'contacts' => Contact::forAccount($accountId)
                 ->with(['company:id,name', 'tags:id,name,color'])
                 ->withCount(['leads as open_leads_count' => fn ($q) => $q->where('status', 'open')])
+                // Agent solo ve contactos con al menos un lead asignado a él.
+                ->when(! $isAdmin, fn ($query) => $query->whereHas('leads', fn ($q) => $q->where('responsible_user_id', $user->id)))
                 ->when($request->query('q'), fn ($query, $q) => $query->where(fn ($w) => $w
                     ->where('name', 'like', "%{$q}%")
                     ->orWhere('phone', 'like', "%{$q}%")

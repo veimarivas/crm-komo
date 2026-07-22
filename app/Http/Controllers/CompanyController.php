@@ -12,12 +12,16 @@ class CompanyController extends Controller
 {
     public function index(Request $request): Response
     {
-        $accountId = $request->user()->account_id;
+        $user = $request->user();
+        $accountId = $user->account_id;
+        $isAdmin = $user->hasRoleAtLeast(\App\Models\User::ROLE_ADMIN);
 
         return Inertia::render('Companies/Index', [
             'companies' => Company::forAccount($accountId)
                 ->with('tags:id,name,color')
                 ->withCount(['contacts', 'leads as open_leads_count' => fn ($q) => $q->where('status', 'open')])
+                // Agent solo ve empresas con al menos un lead asignado a él.
+                ->when(! $isAdmin, fn ($query) => $query->whereHas('leads', fn ($q) => $q->where('responsible_user_id', $user->id)))
                 ->when($request->query('q'), fn ($query, $q) => $query->where('name', 'like', "%{$q}%"))
                 ->orderBy('name')
                 ->paginate(25)

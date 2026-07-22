@@ -69,36 +69,39 @@ Route::middleware('auth')->group(function () {
     // Reportes
     Route::get('/reports', [\App\Http\Controllers\ReportController::class, 'index'])->name('reports.index');
 
-    // Formularios web (admin)
-    Route::get('/settings/web-forms', [\App\Http\Controllers\WebFormController::class, 'index'])->name('webforms.index');
-    Route::post('/settings/web-forms', [\App\Http\Controllers\WebFormController::class, 'store'])->name('webforms.store');
-    Route::post('/settings/web-forms/{webForm}/toggle', [\App\Http\Controllers\WebFormController::class, 'toggle'])->name('webforms.toggle');
-    Route::delete('/settings/web-forms/{webForm}', [\App\Http\Controllers\WebFormController::class, 'destroy'])->name('webforms.destroy');
-
-    // Equipo
-    Route::get('/settings/team', [\App\Http\Controllers\TeamController::class, 'index'])->name('settings.team');
-    Route::post('/settings/team/invitations', [\App\Http\Controllers\TeamController::class, 'invite'])->name('team.invite');
-    Route::delete('/settings/team/invitations/{invitation}', [\App\Http\Controllers\TeamController::class, 'revokeInvitation'])->name('team.invitations.revoke');
-    Route::post('/settings/team/invitations/{invitation}/regenerate', [\App\Http\Controllers\TeamController::class, 'regenerateInvitation'])->name('team.invitations.regenerate');
-    Route::patch('/settings/team/members/{member}', [\App\Http\Controllers\TeamController::class, 'updateMember'])->name('team.members.update');
-    Route::delete('/settings/team/members/{member}', [\App\Http\Controllers\TeamController::class, 'removeMember'])->name('team.members.remove');
-    Route::post('/settings/team/members/{member}/transfer-ownership', [\App\Http\Controllers\TeamController::class, 'transferOwnership'])->name('team.members.transfer');
-    Route::post('/settings/team/api-keys', [\App\Http\Controllers\TeamController::class, 'storeApiKey'])->name('team.api-keys.store');
-    Route::delete('/settings/team/api-keys/{apiKey}', [\App\Http\Controllers\TeamController::class, 'revokeApiKey'])->name('team.api-keys.revoke');
-
-    // Notificaciones
+    // Notificaciones (accesible a todos los usuarios logueados)
     Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index'])->name('notifications');
     Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllRead'])->name('notifications.read-all');
 
-    // Campos personalizados
-    Route::get('/settings/custom-fields', [\App\Http\Controllers\CustomFieldController::class, 'index'])->name('custom-fields.index');
-    Route::post('/settings/custom-fields', [\App\Http\Controllers\CustomFieldController::class, 'store'])->name('custom-fields.store');
-    Route::delete('/settings/custom-fields/{customField}', [\App\Http\Controllers\CustomFieldController::class, 'destroy'])->name('custom-fields.destroy');
+    // ---- SECCIONES ADMIN-ONLY (bloqueadas para agent/viewer) ----
+    Route::middleware('admin.only')->group(function () {
+        // Formularios web
+        Route::get('/settings/web-forms', [\App\Http\Controllers\WebFormController::class, 'index'])->name('webforms.index');
+        Route::post('/settings/web-forms', [\App\Http\Controllers\WebFormController::class, 'store'])->name('webforms.store');
+        Route::post('/settings/web-forms/{webForm}/toggle', [\App\Http\Controllers\WebFormController::class, 'toggle'])->name('webforms.toggle');
+        Route::delete('/settings/web-forms/{webForm}', [\App\Http\Controllers\WebFormController::class, 'destroy'])->name('webforms.destroy');
 
-    // Integración con el wacrm
-    Route::get('/settings/integration', [\App\Http\Controllers\IntegrationController::class, 'edit'])->name('settings.integration');
-    Route::post('/settings/integration', [\App\Http\Controllers\IntegrationController::class, 'update'])->name('settings.integration.update');
-    Route::post('/settings/integration/test', [\App\Http\Controllers\IntegrationController::class, 'test'])->name('settings.integration.test');
+        // Equipo
+        Route::get('/settings/team', [\App\Http\Controllers\TeamController::class, 'index'])->name('settings.team');
+        Route::post('/settings/team/invitations', [\App\Http\Controllers\TeamController::class, 'invite'])->name('team.invite');
+        Route::delete('/settings/team/invitations/{invitation}', [\App\Http\Controllers\TeamController::class, 'revokeInvitation'])->name('team.invitations.revoke');
+        Route::post('/settings/team/invitations/{invitation}/regenerate', [\App\Http\Controllers\TeamController::class, 'regenerateInvitation'])->name('team.invitations.regenerate');
+        Route::patch('/settings/team/members/{member}', [\App\Http\Controllers\TeamController::class, 'updateMember'])->name('team.members.update');
+        Route::delete('/settings/team/members/{member}', [\App\Http\Controllers\TeamController::class, 'removeMember'])->name('team.members.remove');
+        Route::post('/settings/team/members/{member}/transfer-ownership', [\App\Http\Controllers\TeamController::class, 'transferOwnership'])->name('team.members.transfer');
+        Route::post('/settings/team/api-keys', [\App\Http\Controllers\TeamController::class, 'storeApiKey'])->name('team.api-keys.store');
+        Route::delete('/settings/team/api-keys/{apiKey}', [\App\Http\Controllers\TeamController::class, 'revokeApiKey'])->name('team.api-keys.revoke');
+
+        // Campos personalizados
+        Route::get('/settings/custom-fields', [\App\Http\Controllers\CustomFieldController::class, 'index'])->name('custom-fields.index');
+        Route::post('/settings/custom-fields', [\App\Http\Controllers\CustomFieldController::class, 'store'])->name('custom-fields.store');
+        Route::delete('/settings/custom-fields/{customField}', [\App\Http\Controllers\CustomFieldController::class, 'destroy'])->name('custom-fields.destroy');
+
+        // Integración con el wacrm
+        Route::get('/settings/integration', [\App\Http\Controllers\IntegrationController::class, 'edit'])->name('settings.integration');
+        Route::post('/settings/integration', [\App\Http\Controllers\IntegrationController::class, 'update'])->name('settings.integration.update');
+        Route::post('/settings/integration/test', [\App\Http\Controllers\IntegrationController::class, 'test'])->name('settings.integration.test');
+    });
 });
 
 // SSO ligero del ecosistema - consume tokens de un solo uso emitidos

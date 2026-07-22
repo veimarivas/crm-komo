@@ -42,24 +42,28 @@ const NAV = [
         route: 'webforms.index',
         match: 'webforms.*',
         label: 'Formularios',
+        adminOnly: true,
         icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
     },
     {
         route: 'custom-fields.index',
         match: 'custom-fields.*',
         label: 'Campos',
+        adminOnly: true,
         icon: 'M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75',
     },
     {
         route: 'settings.team',
         match: 'settings.team',
         label: 'Equipo',
+        adminOnly: true,
         icon: 'M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z',
     },
     {
         route: 'settings.integration',
         match: 'settings.integration',
         label: 'Integración',
+        adminOnly: true,
         icon: 'M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244',
     },
 ];
@@ -68,6 +72,8 @@ export default function AuthenticatedLayout({ header, children }) {
     const user = usePage().props.auth.user;
     const unread = usePage().props.unreadNotifications ?? 0;
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const isAdmin = user?.account_role === 'owner' || user?.account_role === 'admin';
+    const visibleNav = NAV.filter((item) => !item.adminOnly || isAdmin);
 
     const nav = (mobile = false) => (
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
@@ -93,7 +99,7 @@ export default function AuthenticatedLayout({ header, children }) {
                 Notificaciones
             </Link>
             <div className="h-px bg-white/10 my-2 mx-3" />
-            {NAV.map((item) => {
+            {visibleNav.map((item) => {
                 const active = route().current(item.match);
                 return (
                     <Link
