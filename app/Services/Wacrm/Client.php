@@ -1,0 +1,74 @@
+<?php
+
+namespace App\Services\Wacrm;
+
+use App\Models\Integration;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Http;
+use RuntimeException;
+
+/**
+ * Cliente de la API pública del wacrm (el CRM de WhatsApp).
+ * Endpoints: /api/v1/contacts, /api/v1/conversations, /api/v1/messages.
+ * La api_key vive cifrada en la integración de la cuenta.
+ */
+class Client
+{
+    public function __construct(private readonly Integration $integration)
+    {
+    }
+
+    public static function for(Integration $integration): self
+    {
+        return new self($integration);
+    }
+
+    private function request(): PendingRequest
+    {
+        return Http::withToken($this->integration->wacrm_api_key)
+            ->acceptJson()
+            ->timeout(15)
+            ->baseUrl($this->integration->baseUrl().'/api/v1');
+    }
+
+    /** Prueba la conexión y los scopes de la clave. */
+    public function me(): array
+    {
+        return $this->unwrap($this->request()->get('/me'));
+    }
+
+    public function contacts(int $page = 1, ?string $search = null): array
+    {
+        return $this->unwrap($this->request()->get('/contacts', array_filter([
+            'page' => $page,
+            'q' => $search,
+        ])));
+    }
+
+    public function conversations(int $page = 1): array
+    {
+        return $this->unwrap($this->request()->get('/conversations', ['page' => $page]));
+    }
+
+    public function conversationMessages(string $conversationId, int $page = 1): array
+    {
+        return $this->unwrap($this->request()->get("/conversations/{$conversationId}/messages", ['page' => $page]));
+    }
+
+    /** Envía un WhatsApp al teléfono indicado (crea contacto/conversación allá si no existen). */
+    public function sendMessage(string $phone, string $text): array
+    {
+        return $this->unwrap($this->request()->post('/messages', ['to' => $phone, 'text' => $text]));
+    }
+
+    private function unwrap($response): array
+    {
+        if ($response->failed()) {
+            $error = $response->json('message') ?? "HTTP {$response->status()}";
+
+            throw new RuntimeException("wacrm API: {$error}");
+        }
+
+        return $response->json() ?? [];
+    }
+}
