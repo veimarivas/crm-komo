@@ -205,6 +205,19 @@ export default function Show({ lead, stages, events, tasks, notes, members, cont
 
     useEffect(() => { if (tab === 'chat') bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [tab, chatItems.length]);
 
+    // Polling en tiempo real (5s) mientras la pestaña Chat esté activa y visible.
+    // Solo refetch los props que cambian (events + tasks + notes), preservando
+    // scroll y estado local del formulario.
+    useEffect(() => {
+        if (tab !== 'chat') return;
+        const tick = () => {
+            if (document.hidden) return; // no consume batería con la pestaña en segundo plano
+            router.reload({ only: ['events', 'tasks', 'notes', 'lead'], preserveScroll: true, preserveState: true });
+        };
+        const id = setInterval(tick, 5000);
+        return () => clearInterval(id);
+    }, [tab]);
+
     return (
         <AuthenticatedLayout>
             <Head title={lead.title} />
