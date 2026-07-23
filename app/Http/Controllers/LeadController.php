@@ -338,9 +338,10 @@ class LeadController extends Controller
             throw ValidationException::withMessages(['text' => $e->getMessage()]);
         }
 
-        $lead->recordEvent('message_out', $request->user(), [
-            'text' => mb_substr($validated['text'], 0, 500),
-        ]);
+        // NO grabamos el evento message_out localmente: el wacrm dispara el
+        // webhook `message.sent` que EventProcessor@handleOutboundMessage
+        // registra en el timeline. Si lo grabáramos acá también, el mensaje
+        // aparecería duplicado. El webhook es la única fuente de verdad.
 
         return back()->with('success', 'WhatsApp enviado.');
     }
