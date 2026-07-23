@@ -40,8 +40,7 @@ export default function GuestLayout({ children }) {
 
                 <div className="relative text-center pb-6">
                     <p className="text-white/40 text-sm">
-                        &copy; {new Date().getFullYear()} Komo CRM.
-                        Crafted with <span className="text-red-400/60">&hearts;</span>
+                        &copy; {new Date().getFullYear()} Derechos reservados
                     </p>
                 </div>
             </div>

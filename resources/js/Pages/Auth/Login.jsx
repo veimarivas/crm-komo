@@ -140,16 +140,6 @@ export default function Login({ status, canResetPassword }) {
                         </form>
                     </div>
                 </div>
-
-                <p className="text-center mt-5 text-sm text-white/70">
-                    ¿No tienes una cuenta?{' '}
-                    <Link
-                        href={route('register')}
-                        className="text-[#e6dd5e] font-semibold underline decoration-[#e6dd5e]/40 hover:decoration-[#e6dd5e] transition-all"
-                    >
-                        Regístrate
-                    </Link>
-                </p>
             </div>
         </GuestLayout>
     );
