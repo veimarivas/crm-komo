@@ -12,13 +12,13 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Leads vía API pública. Los dos consumidores previstos:
+ * Leads vía API pública. Consumidores:
  *
- *   GET  /api/v1/leads?ad_id=…  → meta_ads agrega leads/won/revenue
- *                                 por anuncio para calcular ROAS.
- *   POST /api/v1/leads          → meta_ads crea el lead de un Lead Ad
- *                                 (source=lead_ad, idempotente por
- *                                 meta_leadgen_id).
+ *   GET   /api/v1/leads?ad_id=…       → meta_ads: ROAS por anuncio.
+ *   POST  /api/v1/leads               → meta_ads: crear lead de Lead Ad.
+ *   PATCH /api/v1/leads/{id}/revenue  → invoice: actualiza revenue REAL
+ *                                        (invoiced_cents/collected_cents)
+ *                                        cuando factura/cobra.
  */
 class LeadApiController extends Controller
 {
@@ -42,6 +42,8 @@ class LeadApiController extends Controller
                 'name' => $lead->title,
                 'status' => $lead->status,
                 'value_cents' => (int) round(((float) $lead->value) * 100),
+                'invoiced_cents' => (int) $lead->invoiced_cents,
+                'collected_cents' => (int) $lead->collected_cents,
                 'source' => $lead->source,
                 'source_ref' => $lead->source_ref,
                 'created_at' => $lead->created_at?->toIso8601String(),
@@ -162,5 +164,40 @@ class LeadApiController extends Controller
         );
 
         return response()->json(['data' => $lead->only(['id', 'title', 'status', 'source', 'source_ref'])], 201);
+    }
+
+    /**
+     * PATCH /api/v1/leads/{id}/revenue — Invoice actualiza el revenue REAL
+     * del lead cuando emite factura y registra pagos. Los valores son
+     * absolutos (no delta) para tolerar reenvíos y borrado de pagos.
+     */
+    public function updateRevenue(Request $request, string $id): JsonResponse
+    {
+        $lead = Lead::forAccount($this->accountId($request))->findOrFail($id);
+
+        $validated = $request->validate([
+            'invoiced_cents' => 'required|integer|min:0',
+            'collected_cents' => 'required|integer|min:0',
+        ]);
+
+        $lead->update($validated);
+
+        // Aviso al owner cuando cambia el estado de cobro (útil sin polling).
+        if ($lead->wasChanged('collected_cents') && $lead->collected_cents >= $lead->invoiced_cents && $lead->invoiced_cents > 0) {
+            AppNotification::notify(
+                $lead->account_id,
+                $lead->account->owner_user_id,
+                'lead_fully_paid',
+                "Lead cobrado por completo: {$lead->title}",
+                'Total: '.number_format($lead->collected_cents / 100, 2).' '.($lead->currency ?? 'USD'),
+                $lead->id,
+            );
+        }
+
+        return response()->json(['data' => [
+            'id' => $lead->id,
+            'invoiced_cents' => (int) $lead->invoiced_cents,
+            'collected_cents' => (int) $lead->collected_cents,
+        ]]);
     }
 }

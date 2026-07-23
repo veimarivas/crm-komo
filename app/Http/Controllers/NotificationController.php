@@ -28,4 +28,22 @@ class NotificationController extends Controller
 
         return back();
     }
+
+    /**
+     * Marca una notificación como leída y redirige al lead asociado (o a la
+     * lista si no hay lead). Se usa como href del CTA "Ver lead" en la lista
+     * y desde la campana del header, para que un solo clic haga las dos cosas.
+     */
+    public function go(Request $request, AppNotification $notification): RedirectResponse
+    {
+        abort_if($notification->user_id !== $request->user()->id, 403);
+
+        if (! $notification->read_at) {
+            $notification->update(['read_at' => now()]);
+        }
+
+        return $notification->lead_id
+            ? redirect()->route('leads.show', $notification->lead_id)
+            : redirect()->route('notifications');
+    }
 }

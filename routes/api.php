@@ -22,6 +22,10 @@ Route::prefix('v1')->middleware('throttle:public-api')->group(function () {
     Route::post('/leads', [LeadApiController::class, 'store'])
         ->middleware('api.key:leads:write');
 
+    // Invoice actualiza revenue REAL del lead cuando factura/cobra (Fase 4 F4-Invoice).
+    Route::patch('/leads/{id}/revenue', [LeadApiController::class, 'updateRevenue'])
+        ->middleware('api.key:leads:write');
+
     Route::get('/contacts', [ContactApiController::class, 'index'])
         ->middleware('api.key:contacts:read');
 

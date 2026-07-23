@@ -60,7 +60,7 @@ export default function Index({ notifications }) {
                                         </div>
                                         {n.body && <p className="mt-1 text-sm text-gray-600">{n.body}</p>}
                                         {n.lead && (
-                                            <Link href={route('leads.show', n.lead.id)} className="mt-1.5 inline-block text-xs font-semibold text-emerald-600 hover:text-emerald-700">
+                                            <Link href={route('notifications.go', n.id)} className="mt-1.5 inline-block text-xs font-semibold text-emerald-600 hover:text-emerald-700">
                                                 Ver lead «{n.lead.title}» →
                                             </Link>
                                         )}

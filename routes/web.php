@@ -42,6 +42,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/tags', [\App\Http\Controllers\TagController::class, 'store'])->name('tags.store');
     Route::delete('/tags/{tag}', [\App\Http\Controllers\TagController::class, 'destroy'])->name('tags.destroy');
     Route::post('/leads/{lead}/whatsapp', [\App\Http\Controllers\LeadController::class, 'sendWhatsapp'])->name('leads.whatsapp');
+    Route::post('/leads/{lead}/quote', [\App\Http\Controllers\LeadController::class, 'createQuote'])->name('leads.quote');
     Route::patch('/leads/{lead}/ai-mode', [\App\Http\Controllers\LeadController::class, 'setAiMode'])->name('leads.ai-mode');
 
     // Tareas
@@ -73,6 +74,7 @@ Route::middleware('auth')->group(function () {
     // Notificaciones (accesible a todos los usuarios logueados)
     Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index'])->name('notifications');
     Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllRead'])->name('notifications.read-all');
+    Route::get('/notifications/{notification}/go', [\App\Http\Controllers\NotificationController::class, 'go'])->name('notifications.go');
 
     // ---- SECCIONES ADMIN-ONLY (bloqueadas para agent/viewer) ----
     Route::middleware('admin.only')->group(function () {

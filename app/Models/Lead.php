@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
     'responsible_user_id', 'ai_enabled', 'title', 'value', 'currency', 'source',
     'source_ref', 'source_url', 'meta_leadgen_id',
     'status', 'closed_at', 'wacrm_conversation_id',
+    'invoiced_cents', 'collected_cents',
 ])]
 class Lead extends Model
 {

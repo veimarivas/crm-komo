@@ -54,6 +54,10 @@ class ProvisionController extends Controller
             'wacrm_integration.url' => 'required_with:wacrm_integration|url|max:2048',
             'wacrm_integration.api_key' => 'required_with:wacrm_integration|string|max:255',
             'wacrm_integration.webhook_secret' => 'required_with:wacrm_integration|string|max:255',
+            // Fase 4 con Invoice: integración komo → invoice (botón "Cotizar" en Leads/Show).
+            'invoice_integration' => 'nullable|array',
+            'invoice_integration.url' => 'required_with:invoice_integration|url|max:2048',
+            'invoice_integration.api_key' => 'required_with:invoice_integration|string|max:255',
         ]);
 
         $user = User::where('email', $validated['email'])->first();
@@ -103,6 +107,15 @@ class ProvisionController extends Controller
                     'is_active' => true,
                 ],
             );
+        }
+
+        // Integración con Invoice (Fase 4 F4-Invoice).
+        if ($invoice = $validated['invoice_integration'] ?? null) {
+            $integration = Integration::forAccount($user->account_id)->firstOrCreate([]);
+            $integration->update([
+                'invoice_url' => rtrim($invoice['url'], '/'),
+                'invoice_api_key' => $invoice['api_key'],
+            ]);
         }
 
         return response()->json([

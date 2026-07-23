@@ -345,6 +345,59 @@ class LeadController extends Controller
         return back()->with('success', 'WhatsApp enviado.');
     }
 
+    /**
+     * Crea una cotización en Komo Invoice pre-llenada con datos del lead
+     * (Fase 4 F4-Invoice). Devuelve el link público que abre la cotización
+     * en Invoice para completar los items.
+     */
+    public function createQuote(Request $request, Lead $lead): RedirectResponse
+    {
+        $this->authorizeLead($request, $lead);
+
+        $integration = $request->user()->account->integration;
+        if (! $integration?->invoice_url || ! $integration->invoice_api_key) {
+            return back()->withErrors(['quote' => 'La integración con Komo Invoice no está cableada — pídele al hub que reaprovisione el ecosistema.']);
+        }
+
+        if (! $lead->contact) {
+            return back()->withErrors(['quote' => 'El lead no tiene contacto — no se puede cotizar sin cliente.']);
+        }
+
+        $payload = [
+            'customer' => [
+                'name' => $lead->contact->name ?? $lead->title,
+                'email' => $lead->contact->email,
+                'phone' => $lead->contact->phone,
+                'company' => $lead->company?->name,
+                'komo_contact_id' => $lead->contact->id,
+            ],
+            'komo_lead_id' => $lead->id,
+            'currency' => $lead->currency ?? 'USD',
+            // Item inicial con el valor estimado del lead; el vendedor lo
+            // ajustará en Invoice antes de enviar la cotización.
+            'items' => [[
+                'name' => $lead->title,
+                'qty' => 1,
+                'unit_price_cents' => (int) round(((float) $lead->value) * 100),
+                'tax_rate_bps' => 0,
+            ]],
+        ];
+
+        try {
+            $data = \App\Services\Invoice\Client::for($integration)->createQuote($payload);
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['quote' => $e->getMessage()]);
+        }
+
+        $lead->recordEvent('quote_created', $request->user(), [
+            'quote_id' => $data['data']['id'] ?? null,
+            'number' => $data['data']['number'] ?? null,
+        ]);
+
+        // Devuelve el edit_url para que el vendedor termine de armar los items en Invoice.
+        return redirect()->away($data['data']['edit_url']);
+    }
+
     private function authorizeLead(Request $request, Lead $lead): void
     {
         $user = $request->user();
