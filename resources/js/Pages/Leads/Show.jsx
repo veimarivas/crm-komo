@@ -404,7 +404,7 @@ export default function Show({ lead, stages, events, tasks, notes, members, cont
                     </div>
 
                     {/* Columna central+derecha: tabs (chat/tareas/notas/timeline) */}
-                    <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col" style={{ minHeight: '70vh' }}>
+                    <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col" style={{ height: 'calc(100vh - 12rem)', maxHeight: '900px' }}>
                         <div className="flex border-b border-gray-100 bg-white">
                             {[
                                 ['chat', '💬 Chat'],
