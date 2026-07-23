@@ -169,6 +169,7 @@ export default function Show({ lead, stages, events, tasks, notes, members, cont
     const isAdmin = auth?.user?.account_role === 'owner' || auth?.user?.account_role === 'admin';
     const [tab, setTab] = useState('chat');
     const [newTag, setNewTag] = useState(null);
+    const [showLeadPanel, setShowLeadPanel] = useState(true);
     const bottomRef = useRef(null);
 
     const editForm = useForm({
@@ -239,11 +240,27 @@ export default function Show({ lead, stages, events, tasks, notes, members, cont
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
                 {/* Header */}
                 <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-                    <div className="min-w-0">
-                        <Link href={route('leads.index')} className="text-sm text-emerald-600 hover:text-emerald-700 font-medium inline-flex items-center gap-1">
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
-                            Volver a leads
-                        </Link>
+                    <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setShowLeadPanel(!showLeadPanel)}
+                                title={showLeadPanel ? 'Ocultar datos del lead' : 'Mostrar datos del lead'}
+                                className={`p-2 rounded-lg transition-colors ${
+                                    showLeadPanel
+                                        ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                }`}
+                            >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                                </svg>
+                            </button>
+                            <Link href={route('leads.index')} className="text-sm text-emerald-600 hover:text-emerald-700 font-medium inline-flex items-center gap-1">
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
+                                Volver a leads
+                            </Link>
+                        </div>
                         <div className="flex flex-wrap items-center gap-3 mt-1">
                             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{lead.title}</h1>
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold text-white shadow-sm" style={{ backgroundColor: lead.stage?.color }}>
@@ -288,8 +305,9 @@ export default function Show({ lead, stages, events, tasks, notes, members, cont
                     </div>
                 )}
 
-                <div className="grid gap-6 lg:grid-cols-3">
-                    {/* Columna izquierda: datos del lead */}
+                <div className={`grid gap-6 ${showLeadPanel ? 'lg:grid-cols-3' : 'lg:grid-cols-1'}`}>
+                    {/* Columna izquierda: datos del lead (colapsable) */}
+                    {showLeadPanel && (
                     <div className="space-y-6">
                         <form onSubmit={saveEdit} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
                             <h3 className="text-sm font-bold text-gray-900">Datos del lead</h3>
@@ -402,9 +420,10 @@ export default function Show({ lead, stages, events, tasks, notes, members, cont
                             </button>
                         </form>
                     </div>
+                    )}
 
                     {/* Columna central+derecha: tabs (chat/tareas/notas/timeline) */}
-                    <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col" style={{ height: 'calc(100vh - 12rem)', maxHeight: '900px' }}>
+                    <div className={`${showLeadPanel ? 'lg:col-span-2' : ''} bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col`} style={{ height: 'calc(100vh - 12rem)', maxHeight: '900px' }}>
                         <div className="flex border-b border-gray-100 bg-white">
                             {[
                                 ['chat', '💬 Chat'],
