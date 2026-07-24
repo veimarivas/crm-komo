@@ -179,6 +179,7 @@ class EventProcessor
             'text' => mb_substr($data['message']['text'] ?? '', 0, 500),
             'type' => $data['message']['type'] ?? 'text',
             'wamid' => $data['message']['wamid'] ?? null,
+            'media_id' => $data['message']['media_id'] ?? null,
         ]);
     }
 
@@ -218,6 +219,7 @@ class EventProcessor
             'text' => mb_substr($data['message']['text'] ?? '', 0, 500),
             'type' => $data['message']['type'] ?? 'text',
             'wamid' => $wamid,
+            'media_id' => $data['message']['media_id'] ?? null,
             'sender' => $data['message']['sender_type'] ?? 'agent', // 'agent' | 'bot'
             'sender_name' => $data['message']['sender_name'] ?? null,
             'sender_role' => $data['message']['sender_role'] ?? null,

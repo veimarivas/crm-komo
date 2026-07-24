@@ -226,6 +226,29 @@ class LeadController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /**
+     * Proxy de media: descarga el archivo del wacrm y lo re-sirve desde Komo.
+     * Evita problemas de CORS y sesión cross-domain al reproducir audios/ver
+     * imágenes en el chat del lead. El navegador ve un path del propio Komo.
+     * Se cachea 1h en el navegador.
+     */
+    public function media(Request $request, string $mediaId): \Symfony\Component\HttpFoundation\Response
+    {
+        $integration = $request->user()->account->integration;
+        abort_unless($integration?->is_active, 422);
+
+        try {
+            [$contentType, $bytes] = \App\Services\Wacrm\Client::for($integration)->downloadMedia($mediaId);
+        } catch (\Throwable $e) {
+            abort(502, $e->getMessage());
+        }
+
+        return response($bytes, 200, [
+            'Content-Type' => $contentType,
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
     /** Devuelve las plantillas rápidas del equipo (delegadas al wacrm). */
     public function quickReplies(Request $request): \Illuminate\Http\JsonResponse
     {

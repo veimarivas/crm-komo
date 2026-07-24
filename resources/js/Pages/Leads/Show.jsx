@@ -150,6 +150,28 @@ function ChatBubble({ event, contactName }) {
                             <span>{mediaType.label}</span>
                         </p>
                     )}
+                    {/* Reproductor real de media: audio/video usan el proxy /leads/media/{id} */}
+                    {p.type === 'audio' && p.media_id && (
+                        <audio controls src={route('leads.media', p.media_id)} className="w-64 max-w-full my-1" />
+                    )}
+                    {p.type === 'video' && p.media_id && (
+                        <video controls src={route('leads.media', p.media_id)} className="max-h-56 rounded-lg my-1" />
+                    )}
+                    {p.type === 'image' && p.media_id && (
+                        <a href={route('leads.media', p.media_id)} target="_blank" rel="noreferrer">
+                            <img src={route('leads.media', p.media_id)} alt="" className="max-h-56 rounded-lg my-1" />
+                        </a>
+                    )}
+                    {p.type === 'document' && p.media_id && (
+                        <a
+                            href={route('leads.media', p.media_id)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={`inline-flex items-center gap-1.5 my-1 underline text-xs ${isCustomer ? 'text-[#045474]' : 'text-white'}`}
+                        >
+                            📄 Descargar documento
+                        </a>
+                    )}
                     {displayText && (
                         <p className="whitespace-pre-wrap break-words leading-relaxed">{displayText}</p>
                     )}

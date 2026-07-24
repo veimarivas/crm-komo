@@ -46,6 +46,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/leads/{lead}/quote', [\App\Http\Controllers\LeadController::class, 'createQuote'])->name('leads.quote');
     Route::patch('/leads/{lead}/ai-mode', [\App\Http\Controllers\LeadController::class, 'setAiMode'])->name('leads.ai-mode');
     Route::get('/leads-quick-replies', [\App\Http\Controllers\LeadController::class, 'quickReplies'])->name('leads.quick-replies');
+    Route::get('/leads/media/{mediaId}', [\App\Http\Controllers\LeadController::class, 'media'])->name('leads.media');
 
     // Tareas
     Route::get('/tasks', [\App\Http\Controllers\TaskController::class, 'index'])->name('tasks.index');

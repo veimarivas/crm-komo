@@ -80,6 +80,20 @@ class Client
     }
 
     /**
+     * Descarga el binario de un media (audio, imagen, etc.) por su Meta media_id.
+     * Devuelve [contentType, bytes] — Komo lo re-sirve desde su propio dominio
+     * para evitar problemas de CORS/cookies cross-origin.
+     */
+    public function downloadMedia(string $mediaId): array
+    {
+        $response = $this->request()->timeout(30)->get("/media/{$mediaId}");
+        if ($response->failed()) {
+            throw new RuntimeException("wacrm media: HTTP {$response->status()}");
+        }
+        return [$response->header('Content-Type') ?: 'application/octet-stream', $response->body()];
+    }
+
+    /**
      * Provisión idempotente de un usuario en el wacrm por email. Si ya
      * existe en la cuenta remota actualiza el rol. Devuelve el user.
      * Requiere scope team:write en la API key.
