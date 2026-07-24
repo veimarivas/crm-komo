@@ -39,6 +39,53 @@ class ContactController extends Controller
         ]);
     }
 
+    /**
+     * Timeline unificado del contacto: eventos de TODOS sus leads + tareas +
+     * notas ordenados cronológicamente. Vista 360° para reunión con cliente
+     * o handoff entre agentes.
+     */
+    public function show(Request $request, Contact $contact): Response
+    {
+        abort_if($contact->account_id !== $request->user()->account_id, 403);
+
+        $leads = $contact->leads()
+            ->with(['stage:id,name,color,stage_type', 'pipeline:id,name', 'responsible:id,name'])
+            ->orderByDesc('created_at')
+            ->get();
+
+        // Todos los eventos de todos los leads del contacto
+        $events = \App\Models\LeadEvent::whereIn('lead_id', $leads->pluck('id'))
+            ->with(['actor:id,name', 'lead:id,title'])
+            ->orderByDesc('created_at')
+            ->limit(200)
+            ->get();
+
+        // Todas las tareas (pendientes + completadas) de los leads
+        $tasks = \App\Models\Task::whereIn('lead_id', $leads->pluck('id'))
+            ->with(['assignee:id,name', 'lead:id,title'])
+            ->orderByDesc('due_at')
+            ->limit(50)
+            ->get();
+
+        // Todas las notas del contacto o de sus leads
+        $notes = \App\Models\Note::where(fn ($q) => $q
+            ->where(fn ($x) => $x->where('notable_type', \App\Models\Contact::class)->where('notable_id', $contact->id))
+            ->orWhere(fn ($x) => $x->where('notable_type', \App\Models\Lead::class)->whereIn('notable_id', $leads->pluck('id')))
+        )
+            ->with('author:id,name')
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get();
+
+        return Inertia::render('Contacts/Timeline', [
+            'contact' => $contact->load(['company:id,name', 'tags:id,name,color']),
+            'leads' => $leads,
+            'events' => $events,
+            'tasks' => $tasks,
+            'notes' => $notes,
+        ]);
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $validated = $this->validated($request);

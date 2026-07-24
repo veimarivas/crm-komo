@@ -56,6 +56,7 @@ Route::middleware('auth')->group(function () {
 
     // Contactos y empresas
     Route::get('/contacts', [\App\Http\Controllers\ContactController::class, 'index'])->name('contacts.index');
+    Route::get('/contacts/{contact}/timeline', [\App\Http\Controllers\ContactController::class, 'show'])->name('contacts.timeline');
     Route::post('/contacts', [\App\Http\Controllers\ContactController::class, 'store'])->name('contacts.store');
     Route::post('/contacts/import-wacrm', [\App\Http\Controllers\ContactController::class, 'importFromWacrm'])->name('contacts.import-wacrm');
     Route::patch('/contacts/{contact}', [\App\Http\Controllers\ContactController::class, 'update'])->name('contacts.update');

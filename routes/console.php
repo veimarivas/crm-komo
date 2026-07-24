@@ -37,6 +37,9 @@ Artisan::command('tasks:notify-overdue', function () {
 
 Schedule::command('tasks:notify-overdue')->everyTenMinutes();
 
-// Recordatorio diario a cada agente vía WhatsApp con sus tareas del día
-// (requiere phone cargado en User + integración wacrm activa).
-Schedule::command('komo:remind-daily-tasks')->dailyAt('08:00');
+// El envío de recordatorios por WhatsApp `komo:remind-daily-tasks` se dejó
+// en el código pero NO se agenda: Meta cobra por conversaciones iniciadas
+// desde el negocio fuera de la ventana de 24h (~$0.01-0.03 USD por agente
+// por día en Bolivia) y además requiere un template aprobado. Preferimos
+// las notificaciones in-app (AppNotification + tasks:notify-overdue arriba).
+// Si más adelante se aprueba un template en Meta, reactivar acá.
