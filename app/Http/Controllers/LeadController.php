@@ -191,6 +191,54 @@ class LeadController extends Controller
         return back()->with('success', 'Lead actualizado.');
     }
 
+    /** Envía un archivo por WhatsApp desde el chat del lead (a través del wacrm). */
+    public function sendMedia(Request $request, Lead $lead): \Illuminate\Http\JsonResponse
+    {
+        $this->authorizeLead($request, $lead);
+
+        $request->validate([
+            'file' => 'required|file|max:16384', // 16MB
+            'caption' => 'nullable|string|max:1024',
+        ]);
+
+        $integration = $request->user()->account->integration;
+        if (! $integration?->is_active) {
+            return response()->json(['message' => 'Integración con wacrm no activa.'], 422);
+        }
+        if (! $lead->contact?->phone) {
+            return response()->json(['message' => 'El lead no tiene teléfono.'], 422);
+        }
+
+        $file = $request->file('file');
+
+        try {
+            \App\Services\Wacrm\Client::for($integration)->sendMedia(
+                phone: $lead->contact->phone_normalized ?? $lead->contact->phone,
+                fileBase64: base64_encode($file->get()),
+                mimeType: $file->getMimeType() ?? 'application/octet-stream',
+                filename: $file->getClientOriginalName(),
+                caption: $request->input('caption'),
+            );
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 502);
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Devuelve las plantillas rápidas del equipo (delegadas al wacrm). */
+    public function quickReplies(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $integration = $request->user()->account->integration;
+        if (! $integration?->is_active) return response()->json([]);
+
+        try {
+            return response()->json(\App\Services\Wacrm\Client::for($integration)->quickReplies());
+        } catch (\Throwable $e) {
+            return response()->json([]);
+        }
+    }
+
     /**
      * Toggle IA/Humano del lead. Solo lo puede cambiar el admin (si el lead
      * no tiene responsable) o el responsable asignado. Sincroniza al wacrm.

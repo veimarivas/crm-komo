@@ -61,6 +61,24 @@ class Client
         return $this->unwrap($this->request()->post('/messages', ['to' => $phone, 'text' => $text]));
     }
 
+    /** Envía un archivo (imagen/audio/video/documento) por WhatsApp. */
+    public function sendMedia(string $phone, string $fileBase64, string $mimeType, ?string $filename = null, ?string $caption = null): array
+    {
+        return $this->unwrap($this->request()->timeout(60)->post('/messages/media', array_filter([
+            'to' => $phone,
+            'file_base64' => $fileBase64,
+            'mime_type' => $mimeType,
+            'filename' => $filename,
+            'caption' => $caption,
+        ])));
+    }
+
+    /** Obtiene las plantillas rápidas compartidas del equipo (para el composer). */
+    public function quickReplies(): array
+    {
+        return $this->unwrap($this->request()->get('/quick-replies'));
+    }
+
     /**
      * Provisión idempotente de un usuario en el wacrm por email. Si ya
      * existe en la cuenta remota actualiza el rol. Devuelve el user.

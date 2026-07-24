@@ -1,6 +1,29 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Recorder from 'opus-recorder';
+import encoderPath from 'opus-recorder/dist/encoderWorker.min.js?url';
+
+function csrf() { return document.querySelector('meta[name="csrf-token"]')?.content ?? ''; }
+
+/** Web Speech API: lee texto en voz alta (mismo patrón que wacrm). */
+const ttsState = { current: null };
+function speakText(text, onEnd) {
+    if (!('speechSynthesis' in window)) { onEnd?.(); return; }
+    if (ttsState.current) {
+        window.speechSynthesis.cancel();
+        const prev = ttsState.current;
+        ttsState.current = null;
+        prev.onEnd?.();
+        if (prev.text === text) return;
+    }
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'es-BO'; u.rate = 1.05;
+    u.onend = () => { ttsState.current = null; onEnd?.(); };
+    u.onerror = () => { ttsState.current = null; onEnd?.(); };
+    window.speechSynthesis.speak(u);
+    ttsState.current = { text, onEnd };
+}
 
 function money(value, currency) {
     return new Intl.NumberFormat('es', { style: 'currency', currency: currency || 'USD', maximumFractionDigits: 0 }).format(value || 0);
@@ -80,16 +103,37 @@ function outboundAuthor(p) {
     return { text: name + (isAdmin ? ' · Admin' : ''), color: 'text-[#045474]' };
 }
 
+const TYPE_META = {
+    audio: { icon: '🎙', label: 'Audio' },
+    image: { icon: '🖼️', label: 'Imagen' },
+    video: { icon: '🎥', label: 'Video' },
+    document: { icon: '📄', label: 'Documento' },
+};
+
 function ChatBubble({ event, contactName }) {
     const isCustomer = event.event_type === 'message_in';
     const p = event.payload ?? {};
     const time = new Date(event.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const author = !isCustomer ? outboundAuthor(p) : null;
+    const [isSpeaking, setIsSpeaking] = useState(false);
+
+    const mediaType = p.type && p.type !== 'text' ? TYPE_META[p.type] : null;
+    // El "text" se usa como fallback / caption / transcript
+    const displayText = p.text || null;
+    const readable = displayText || p.transcript;
+
+    const toggleSpeak = (e) => {
+        e.stopPropagation();
+        if (!readable) return;
+        if (isSpeaking) { window.speechSynthesis.cancel(); setIsSpeaking(false); return; }
+        setIsSpeaking(true);
+        speakText(readable, () => setIsSpeaking(false));
+    };
 
     return (
-        <div className={`flex items-end gap-2 ${isCustomer ? 'justify-start' : 'justify-end'}`}>
+        <div className={`group flex items-end gap-2 ${isCustomer ? 'justify-start' : 'justify-end'}`}>
             {isCustomer && <Avatar name={contactName} size="sm" />}
-            <div className={`flex flex-col max-w-[70%] ${isCustomer ? 'items-start' : 'items-end'}`}>
+            <div className={`flex flex-col max-w-[75%] ${isCustomer ? 'items-start' : 'items-end'}`}>
                 {author && (
                     <span className={`text-[10px] font-bold mb-0.5 mr-2 ${author.color}`}>{author.text}</span>
                 )}
@@ -100,13 +144,96 @@ function ChatBubble({ event, contactName }) {
                             : 'bg-gradient-to-br from-[#045474] to-[#1c486c] text-white rounded-br-md shadow-md shadow-[#045474]/20'
                     }`}
                 >
-                    <p className="whitespace-pre-wrap break-words leading-relaxed">{p.text || '[sin texto]'}</p>
-                    <div className={`mt-1 flex items-center gap-1 text-[10px] ${isCustomer ? 'text-gray-400' : 'text-white/70'}`}>
+                    {mediaType && (
+                        <p className={`text-xs font-semibold mb-1 flex items-center gap-1.5 ${isCustomer ? 'text-gray-500' : 'text-white/80'}`}>
+                            <span>{mediaType.icon}</span>
+                            <span>{mediaType.label}</span>
+                        </p>
+                    )}
+                    {displayText && (
+                        <p className="whitespace-pre-wrap break-words leading-relaxed">{displayText}</p>
+                    )}
+                    {!displayText && !mediaType && (
+                        <p className="italic opacity-60">[sin contenido]</p>
+                    )}
+                    {!displayText && mediaType?.label === 'Audio' && (
+                        <p className={`italic text-xs ${isCustomer ? 'text-gray-400' : 'text-white/70'}`}>Transcribiendo…</p>
+                    )}
+                    <div className={`mt-1 flex items-center gap-1.5 text-[10px] ${isCustomer ? 'text-gray-400' : 'text-white/70'}`}>
                         <span>{time}</span>
                         {!isCustomer && <span>✓✓</span>}
+                        {readable && (
+                            <button
+                                type="button"
+                                onClick={toggleSpeak}
+                                title={isSpeaking ? 'Detener' : 'Leer en voz alta'}
+                                className={`ml-1 opacity-0 group-hover:opacity-100 transition-opacity ${isSpeaking ? 'text-emerald-300 animate-pulse' : 'hover:text-inherit'}`}
+                            >
+                                {isSpeaking ? '⏸' : '🔊'}
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
+        </div>
+    );
+}
+
+/** Grabador de voz — mismo patrón que wacrm (opus-recorder → ogg/opus). */
+function VoiceRecorder({ onSend, disabled }) {
+    const [state, setState] = useState('idle');
+    const [seconds, setSeconds] = useState(0);
+    const [blob, setBlob] = useState(null);
+    const recRef = useRef(null);
+    const timerRef = useRef(null);
+
+    const start = async () => {
+        try {
+            const rec = new Recorder({
+                encoderPath, encoderApplication: 2049, encoderSampleRate: 48000,
+                originalSampleRateOverride: 48000, numberOfChannels: 1, streamPages: false,
+            });
+            rec.ondataavailable = (data) => {
+                setBlob(new Blob([data], { type: 'audio/ogg' }));
+                setState('preview');
+            };
+            await rec.start();
+            recRef.current = rec; setState('recording'); setSeconds(0);
+            timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
+        } catch (e) { setState('idle'); }
+    };
+    const stop = async () => { clearInterval(timerRef.current); if (recRef.current) { await recRef.current.stop(); recRef.current = null; } };
+    const discard = () => { setBlob(null); setSeconds(0); setState('idle'); };
+    const send = async () => {
+        if (!blob) return;
+        setState('sending');
+        try { await onSend(new File([blob], `voz-${Date.now()}.ogg`, { type: 'audio/ogg' })); discard(); }
+        catch { setState('preview'); }
+    };
+    useEffect(() => () => { clearInterval(timerRef.current); recRef.current?.stop().catch(() => {}); }, []);
+    const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
+    const ss = String(seconds % 60).padStart(2, '0');
+
+    if (state === 'idle') return (
+        <button type="button" onClick={start} disabled={disabled} title="Grabar audio" className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-gray-600 hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 disabled:opacity-50 shadow-sm">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-14 0m7 7v3m-3 0h6M9 5a3 3 0 016 0v6a3 3 0 01-6 0V5z" /></svg>
+        </button>
+    );
+    if (state === 'recording') return (
+        <div className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
+            <span className="w-3 h-3 rounded-full bg-rose-500 animate-pulse" />
+            <span className="text-xs font-mono font-bold text-rose-700">{mm}:{ss}</span>
+            <button type="button" onClick={discard} className="text-xs text-rose-700">Cancelar</button>
+            <button type="button" onClick={stop} className="px-3 py-1 text-xs font-semibold bg-rose-600 text-white rounded-lg">Detener</button>
+        </div>
+    );
+    return (
+        <div className="flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2">
+            {blob && <audio controls src={URL.createObjectURL(blob)} className="h-9" />}
+            <button type="button" onClick={discard} disabled={state === 'sending'} className="px-2 py-1 text-xs text-gray-600">Descartar</button>
+            <button type="button" onClick={send} disabled={state === 'sending'} className="px-3 py-1 text-xs font-semibold bg-gradient-to-r from-[#045474] to-[#1c486c] text-white rounded-lg disabled:opacity-50">
+                {state === 'sending' ? '…' : 'Enviar'}
+            </button>
         </div>
     );
 }
@@ -184,6 +311,45 @@ export default function Show({ lead, stages, events, tasks, notes, members, cont
     const noteForm = useForm({ text: '' });
     const taskForm = useForm({ lead_id: lead.id, task_type: 'call', text: '', due_at: '', assigned_to: '' });
     const waForm = useForm({ text: '' });
+    const fileInputRef = useRef(null);
+    const [quickReplies, setQuickReplies] = useState([]);
+    const [showQuickReplies, setShowQuickReplies] = useState(false);
+    const [uploading, setUploading] = useState(false);
+
+    // Cargar plantillas rápidas (delegadas al wacrm)
+    useEffect(() => {
+        fetch(route('leads.quick-replies'), { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+            .then((r) => r.json()).then(setQuickReplies).catch(() => {});
+    }, []);
+
+    const renderTemplate = (content) => content
+        .replaceAll('{name}', lead.contact?.name ?? '')
+        .replaceAll('{phone}', lead.contact?.phone ?? '')
+        .replaceAll('{email}', lead.contact?.email ?? '');
+
+    const insertQuickReply = (r) => {
+        waForm.setData('text', (waForm.data.text ? waForm.data.text + ' ' : '') + renderTemplate(r.content));
+        setShowQuickReplies(false);
+    };
+
+    const sendFile = async (file) => {
+        if (!file || uploading) return;
+        setUploading(true);
+        try {
+            const body = new FormData();
+            body.append('file', file);
+            const res = await fetch(route('leads.whatsapp-media', lead.id), {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrf(), Accept: 'application/json' },
+                credentials: 'same-origin',
+                body,
+            });
+            if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message ?? 'Error');
+        } finally {
+            setUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
 
     const saveEdit = (e) => { e.preventDefault(); editForm.patch(route('leads.update', lead.id), { preserveScroll: true }); };
     const moveTo = (stageId) => router.patch(route('leads.move', lead.id), { stage_id: stageId }, { preserveScroll: true });
@@ -452,6 +618,18 @@ export default function Show({ lead, stages, events, tasks, notes, members, cont
                                         <p className="font-bold text-gray-900 truncate">{contactName}</p>
                                         <p className="text-xs text-gray-500 font-mono truncate">{lead.contact?.phone || 'sin teléfono'}</p>
                                     </div>
+                                    {lead.contact?.phone && (
+                                        <a
+                                            href={`https://wa.me/${(lead.contact.phone_normalized ?? lead.contact.phone).replace(/[^\d]/g, '')}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            title="Llamar/abrir chat en WhatsApp"
+                                            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all shadow-sm"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" /></svg>
+                                            Llamar
+                                        </a>
+                                    )}
                                     {whatsappEnabled && lead.wacrm_conversation_id && (
                                         (isAdmin || !lead.responsible_user_id || lead.responsible_user_id === auth?.user?.id) ? (
                                             <button
@@ -525,19 +703,66 @@ export default function Show({ lead, stages, events, tasks, notes, members, cont
                                     ) : (
                                         <>
                                             {waForm.errors.text && <p className="mb-2 text-xs text-red-500 font-medium">{waForm.errors.text}</p>}
-                                            <div className="flex items-end gap-2">
+                                            <div className="flex items-end gap-2 flex-wrap">
+                                                <input
+                                                    ref={fileInputRef}
+                                                    type="file"
+                                                    className="hidden"
+                                                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+                                                    onChange={(e) => sendFile(e.target.files[0])}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    disabled={uploading}
+                                                    title="Adjuntar archivo"
+                                                    className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-gray-600 hover:bg-gray-50 disabled:opacity-50 shadow-sm"
+                                                >
+                                                    {uploading ? (
+                                                        <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+                                                    ) : (
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+                                                    )}
+                                                </button>
+                                                <VoiceRecorder onSend={sendFile} disabled={uploading} />
+
+                                                {/* Plantillas rápidas */}
+                                                <div className="relative">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowQuickReplies(!showQuickReplies)}
+                                                        disabled={quickReplies.length === 0}
+                                                        title={quickReplies.length === 0 ? 'Sin plantillas (crear en wacrm)' : 'Plantillas'}
+                                                        className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-gray-600 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-50 shadow-sm"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                                                    </button>
+                                                    {showQuickReplies && (
+                                                        <div className="absolute bottom-14 left-0 z-20 w-72 max-h-64 overflow-y-auto bg-white rounded-xl shadow-2xl border border-gray-100 py-2">
+                                                            <div className="px-3 py-1.5 flex items-center justify-between border-b border-gray-100">
+                                                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Plantillas</span>
+                                                                <button type="button" onClick={() => setShowQuickReplies(false)} className="text-gray-400 hover:text-gray-600">×</button>
+                                                            </div>
+                                                            {quickReplies.map((r) => (
+                                                                <button key={r.id} type="button" onClick={() => insertQuickReply(r)} className="w-full text-left px-3 py-2 hover:bg-emerald-50">
+                                                                    <code className="inline-block px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold font-mono">/{r.shortcut}</code>
+                                                                    <p className="text-xs text-gray-600 mt-1 truncate">{r.content}</p>
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+
                                                 <textarea
                                                     rows={1}
                                                     value={waForm.data.text}
                                                     onChange={(e) => waForm.setData('text', e.target.value)}
                                                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (waForm.data.text.trim()) waForm.post(route('leads.whatsapp', lead.id), { preserveScroll: true, onSuccess: () => waForm.reset() }); } }}
                                                     placeholder={`Mensaje para ${contactName}…`}
-                                                    className="flex-1 resize-none px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#045474]/20 focus:border-[#045474] focus:bg-white transition-all max-h-32"
+                                                    className="flex-1 min-w-[200px] resize-none px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#045474]/20 focus:border-[#045474] focus:bg-white max-h-32"
                                                 />
-                                                <button type="submit" disabled={waForm.processing || !waForm.data.text.trim()} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-br from-[#045474] to-[#1c486c] hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-[#045474]/20 flex items-center gap-1.5">
-                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                                                    </svg>
+                                                <button type="submit" disabled={waForm.processing || !waForm.data.text.trim()} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-br from-[#045474] to-[#1c486c] hover:opacity-90 disabled:opacity-50 shadow-lg shadow-[#045474]/20 flex items-center gap-1.5">
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
                                                     {waForm.processing ? '…' : 'Enviar'}
                                                 </button>
                                             </div>
