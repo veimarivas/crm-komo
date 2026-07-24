@@ -36,3 +36,7 @@ Artisan::command('tasks:notify-overdue', function () {
 })->purpose('Notifica tareas vencidas a sus asignados');
 
 Schedule::command('tasks:notify-overdue')->everyTenMinutes();
+
+// Recordatorio diario a cada agente vía WhatsApp con sus tareas del día
+// (requiere phone cargado en User + integración wacrm activa).
+Schedule::command('komo:remind-daily-tasks')->dailyAt('08:00');

@@ -16,6 +16,7 @@ export default function UpdateProfileInformation({
         useForm({
             name: user.name,
             email: user.email,
+            phone: user.phone ?? '',
         });
 
     const submit = (e) => {
@@ -67,6 +68,23 @@ export default function UpdateProfileInformation({
                     />
 
                     <InputError className="mt-2" message={errors.email} />
+                </div>
+
+                <div>
+                    <InputLabel htmlFor="phone" value="Teléfono WhatsApp (para recordatorios)" />
+                    <TextInput
+                        id="phone"
+                        type="tel"
+                        className="mt-1 block w-full"
+                        value={data.phone}
+                        onChange={(e) => setData('phone', e.target.value)}
+                        placeholder="591xxxxxxxx (con código de país, sin +)"
+                        autoComplete="tel"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                        Si lo cargás, cada mañana a las 8:00 recibís por WhatsApp un resumen de tus tareas del día.
+                    </p>
+                    <InputError className="mt-2" message={errors.phone} />
                 </div>
 
                 {mustVerifyEmail && user.email_verified_at === null && (

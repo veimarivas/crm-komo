@@ -5,7 +5,7 @@ function money(value, currency) {
     return new Intl.NumberFormat('es', { style: 'currency', currency: currency || 'USD', maximumFractionDigits: 0 }).format(value || 0);
 }
 
-export default function Index({ pipelines, pipelineId, funnel, monthly, byUser, conversion, currency }) {
+export default function Index({ pipelines, pipelineId, funnel, monthly, byUser, conversion, bySource = [], currency }) {
     const maxFunnel = Math.max(1, ...funnel.map((s) => s.count));
     const maxMonthly = Math.max(1, ...monthly.map((m) => m.won + m.lost));
 
@@ -113,6 +113,58 @@ export default function Index({ pipelines, pipelineId, funnel, monthly, byUser, 
                         </div>
                     </div>
                 </div>
+
+                {/* Conversión por fuente */}
+                {bySource.length > 0 && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="p-5 sm:p-6 border-b border-gray-100">
+                            <h3 className="text-base font-bold text-gray-900">Conversión por fuente</h3>
+                            <p className="text-xs text-gray-400 mt-0.5">De dónde vienen los leads y qué tasa convierten a ganado</p>
+                        </div>
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-gray-50/80">
+                                    <th className="text-left px-5 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Fuente</th>
+                                    <th className="text-right px-5 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Total</th>
+                                    <th className="text-right px-5 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Abiertos</th>
+                                    <th className="text-right px-5 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Ganados</th>
+                                    <th className="text-right px-5 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Perdidos</th>
+                                    <th className="text-right px-5 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Ingresos</th>
+                                    <th className="text-right px-5 py-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">% Conv.</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {bySource.map((s) => {
+                                    const rate = s.conversion_rate;
+                                    const rateColor = rate >= 50 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : rate >= 25 ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-red-50 text-red-700 ring-red-200';
+                                    const sourceIcon = { whatsapp: '💬', lead_ad: '📣', web_form: '📋', manual: '✍️', api: '⚙️', other: '❓' }[s.source] ?? '❓';
+                                    return (
+                                        <tr key={s.source} className="hover:bg-gray-50">
+                                            <td className="px-5 py-3">
+                                                <span className="inline-flex items-center gap-2 font-semibold text-gray-900">
+                                                    <span className="text-lg">{sourceIcon}</span>
+                                                    {s.label}
+                                                </span>
+                                            </td>
+                                            <td className="px-5 py-3 text-right tabular-nums font-semibold text-gray-900">{s.total}</td>
+                                            <td className="px-5 py-3 text-right tabular-nums text-sky-600">{s.open}</td>
+                                            <td className="px-5 py-3 text-right tabular-nums text-emerald-600">{s.won}</td>
+                                            <td className="px-5 py-3 text-right tabular-nums text-red-500">{s.lost}</td>
+                                            <td className="px-5 py-3 text-right tabular-nums text-gray-700 font-medium">
+                                                {new Intl.NumberFormat('es', { style: 'currency', currency: currency || 'USD', maximumFractionDigits: 0 }).format(s.won_value)}
+                                            </td>
+                                            <td className="px-5 py-3 text-right">
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ring-1 ${rateColor}`}>
+                                                    {rate}%
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
 
                 {/* Ranking del equipo */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

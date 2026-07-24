@@ -74,6 +74,38 @@ class ReportController extends Controller
         $totalWon = $leadScope(Lead::forAccount($accountId)->where('status', 'won'))->count();
         $totalLost = $leadScope(Lead::forAccount($accountId)->where('status', 'lost'))->count();
 
+        // Conversión por fuente (whatsapp, web_form, lead_ad, manual, api, otros)
+        $sourceLabels = [
+            'whatsapp' => 'WhatsApp',
+            'lead_ad' => 'Meta Lead Ad',
+            'web_form' => 'Formulario web',
+            'manual' => 'Manual',
+            'api' => 'API externa',
+        ];
+
+        $bySource = collect(array_keys($sourceLabels))->push(null)->map(function ($source) use ($accountId, $leadScope, $sourceLabels) {
+            $base = fn () => $leadScope(Lead::forAccount($accountId)
+                ->when($source === null, fn ($q) => $q->whereNull('source')->orWhere('source', ''))
+                ->when($source !== null, fn ($q) => $q->where('source', $source)));
+
+            $total = $base()->count();
+            $won = (clone $base())->where('status', 'won')->count();
+            $lost = (clone $base())->where('status', 'lost')->count();
+            $open = (clone $base())->where('status', 'open')->count();
+            $wonValue = (float) (clone $base())->where('status', 'won')->sum('value');
+
+            return [
+                'source' => $source ?? 'other',
+                'label' => $source ? $sourceLabels[$source] : 'Sin fuente',
+                'total' => $total,
+                'won' => $won,
+                'lost' => $lost,
+                'open' => $open,
+                'won_value' => $wonValue,
+                'conversion_rate' => ($won + $lost) > 0 ? round(($won / ($won + $lost)) * 100, 1) : 0,
+            ];
+        })->filter(fn ($s) => $s['total'] > 0)->sortByDesc('total')->values();
+
         return Inertia::render('Reports/Index', [
             'pipelines' => $pipelines->map(fn ($p) => ['id' => $p->id, 'name' => $p->name]),
             'pipelineId' => $selected?->id,
@@ -89,6 +121,7 @@ class ReportController extends Controller
                     : 0,
             ],
             'isAdmin' => $isAdmin,
+            'bySource' => $bySource,
             'currency' => $user->account->default_currency,
         ]);
     }
