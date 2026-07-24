@@ -27,8 +27,47 @@ class EventProcessor
             'contact.created' => $this->syncContact($integration, $data['contact'] ?? []),
             'message.received' => $this->handleInboundMessage($integration, $data),
             'message.sent' => $this->handleOutboundMessage($integration, $data),
+            'message.transcribed' => $this->handleTranscribed($integration, $data),
             default => null, // eventos que no nos interesan se ignoran
         };
+    }
+
+    /**
+     * Un audio del wacrm ya fue transcrito por Whisper. Busca el evento
+     * previo (message_in o message_out) del lead por wamid y agrega el texto
+     * transcrito a su payload. Así en el chat del Komo el audio deja de
+     * mostrarse como "[sin texto]" y muestra la transcripción real.
+     */
+    private function handleTranscribed(Integration $integration, array $data): void
+    {
+        $wamid = $data['message']['wamid'] ?? null;
+        $transcript = $data['message']['transcript'] ?? null;
+        $convId = $data['conversation_id'] ?? null;
+
+        if (! $wamid || ! $transcript || ! $convId) {
+            return;
+        }
+
+        $lead = Lead::forAccount($integration->account_id)
+            ->where('wacrm_conversation_id', $convId)
+            ->latest()
+            ->first();
+
+        if (! $lead) {
+            return;
+        }
+
+        // Buscar el evento (in o out) por wamid en el payload y actualizar el text
+        $lead->events()
+            ->whereIn('event_type', ['message_in', 'message_out'])
+            ->whereJsonContains('payload->wamid', $wamid)
+            ->get()
+            ->each(function ($event) use ($transcript) {
+                $payload = $event->payload ?? [];
+                $payload['text'] = $transcript;
+                $payload['transcript'] = $transcript;
+                $event->update(['payload' => $payload]);
+            });
     }
 
     private function syncContact(Integration $integration, array $remote): ?Contact
